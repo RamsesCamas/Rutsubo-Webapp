@@ -19,6 +19,7 @@ export function DaemonStatus() {
       {provider && (
         <span className="provider">
           modelo: {provider.id} · {provider.health}
+          {provider.reason ? ` (${provider.reason})` : ""}
         </span>
       )}
     </div>

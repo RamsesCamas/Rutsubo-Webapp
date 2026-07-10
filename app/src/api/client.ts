@@ -3,6 +3,7 @@
 
 import type { ApprovalsPage } from "@bindings/ApprovalsPage";
 import type { AuditPage } from "@bindings/AuditPage";
+import type { AsrResponse } from "@bindings/AsrResponse";
 import type { CreateSessionRequest } from "@bindings/CreateSessionRequest";
 import type { DecisionRequest } from "@bindings/DecisionRequest";
 import type { DecisionResponse } from "@bindings/DecisionResponse";
@@ -125,5 +126,19 @@ export const api = {
     if (params.limit) query.set("limit", String(params.limit));
     const qs = query.toString();
     return request<AuditPage>("GET", `/v1/audit${qs ? `?${qs}` : ""}`);
+  },
+  async transcribe(audio: Blob, language?: string): Promise<AsrResponse> {
+    const data = new FormData();
+    data.append("audio", audio, "recording.webm");
+    if (language) data.append("language", language);
+    const headers: Record<string, string> = {};
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const response = await fetch(`${DAEMON_HTTP}/v1/asr/transcribe`, { method: "POST", headers, body: data });
+    if (!response.ok) {
+      const envelope = (await response.json().catch(() => null)) as ErrorEnvelope | null;
+      throw new ApiError(response.status, envelope?.error.code ?? "asr_failed", envelope?.error.message ?? "falló la transcripción");
+    }
+    return response.json() as Promise<AsrResponse>;
   },
 };

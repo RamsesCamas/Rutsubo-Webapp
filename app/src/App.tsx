@@ -10,6 +10,7 @@ import { DaemonSocket } from "./ws/connection";
 import { SessionSequencer } from "./ws/sequencer";
 import { AuditLog } from "./ui/AuditLog";
 import { DaemonStatus } from "./ui/DaemonStatus";
+import { MicButton } from "./ui/MicButton";
 import { DiffViewer } from "./ui/DiffViewer";
 import { MessageStream } from "./ui/MessageStream";
 import { SessionList } from "./ui/SessionList";
@@ -250,6 +251,11 @@ function Conversation({ sessionId }: { sessionId: string }) {
         <button type="submit" disabled={!draft.trim() || view.state === "waiting_approval"}>
           {busy ? "en curso…" : "Enviar"}
         </button>
+        <MicButton
+          disabled={view.state === "waiting_approval" || view.state === "archived"}
+          onText={(text) => setDraft((current) => current ? `${current} ${text}` : text)}
+          onError={setError}
+        />
       </form>
       {error && <p className="error-text">{error}</p>}
     </div>

@@ -2,3 +2,10 @@ node_modules/
 dist/
 .astro/
 *.local
+
+# Perfiles temporales de Chrome que deja cada corrida de Lighthouse
+# (el nombre puede venir con ruta de Windows: C:\...\lighthouse.NNNN/).
+*lighthouse.[0-9]*/
+# Reportes de auditoría: se versiona el corte oficial en docs/audits/*.json,
+# no los artefactos crudos.
+.lighthouseci/

@@ -15,7 +15,8 @@
     "typecheck": "npm run typecheck -w app",
     "sync:bindings": "node scripts/sync-bindings.mjs",
     "check:bindings": "node scripts/sync-bindings.mjs --check",
-    "ci": "npm run check:bindings && npm run typecheck && npm run test && npm run build"
+    "check:secrets": "! rg -q 'gsk_' app/dist public-site/dist 2>/dev/null",
+    "ci": "npm run check:bindings && npm run typecheck && npm run test && npm run build && npm run check:secrets"
   },
   "devDependencies": {
     "@puppeteer/browsers": "^3.0.6",
