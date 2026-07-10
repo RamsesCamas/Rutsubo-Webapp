@@ -24,6 +24,6 @@
     "puppeteer-core": "^25.3.0"
   },
   "dependencies": {
-    "jose": "^6.2.3"
+    "jose": "^5.10.0"
   }
 }
