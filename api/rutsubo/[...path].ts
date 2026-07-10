@@ -1,12 +1,16 @@
 import { verifySession } from "../_auth";
 
 export const config = { api: { bodyParser: false } };
-// Uint8Array (no Buffer): es lo que el tipo BodyInit de fetch acepta.
-async function body(req: any): Promise<Uint8Array | undefined> {
+// BodyInit exige Uint8Array respaldado por ArrayBuffer (no el Buffer de Node,
+// que TS 5.9 tipa sobre ArrayBufferLike): se copia a un buffer propio.
+async function body(req: any) {
   if (["GET", "HEAD"].includes(req.method ?? "GET")) return undefined;
   const parts: Buffer[] = [];
   for await (const chunk of req) parts.push(Buffer.from(chunk));
-  return new Uint8Array(Buffer.concat(parts));
+  const merged = Buffer.concat(parts);
+  const out = new Uint8Array(merged.byteLength);
+  out.set(merged);
+  return out;
 }
 export default async function handler(req: any, res: any) {
   const email = await verifySession(req.headers.cookie);
