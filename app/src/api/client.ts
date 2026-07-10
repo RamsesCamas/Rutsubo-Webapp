@@ -144,8 +144,15 @@ export const api = {
     return response.json() as Promise<AsrResponse>;
   },
   authMe: async () => {
-    const response = await fetch("/api/auth/me");
-    return response.ok ? (response.json() as Promise<{ authenticated: true; email: string }>) : null;
+    // Robusto ante BFF caído o respuesta no-JSON: null = sin sesión (nunca
+    // dejar la pantalla clavada en "comprobando sesión").
+    try {
+      const response = await fetch("/api/auth/me");
+      if (!response.ok) return null;
+      return (await response.json()) as { authenticated: true; email: string };
+    } catch {
+      return null;
+    }
   },
   logout: () => fetch("/api/auth/logout", { method: "POST" }),
   // Ticket efímero de un solo uso para el handshake del WS (el navegador no
