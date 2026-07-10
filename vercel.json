@@ -1,5 +1,8 @@
 {
   "buildCommand": "npm run build -w app",
   "outputDirectory": "app/dist",
-  "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/api/rutsubo/:path*", "destination": "/api/rutsubo/[...path]" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
 }
