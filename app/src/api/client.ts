@@ -19,7 +19,8 @@ import type { SessionDetail } from "@bindings/SessionDetail";
 import type { SessionDto } from "@bindings/SessionDto";
 import type { SessionsPage } from "@bindings/SessionsPage";
 
-export const DAEMON_HTTP = import.meta.env.VITE_DAEMON_HTTP ?? "http://127.0.0.1:7431";
+export const REMOTE_AUTH = import.meta.env.VITE_AUTH_MODE === "remote";
+export const DAEMON_HTTP = REMOTE_AUTH ? "/api/rutsubo" : (import.meta.env.VITE_DAEMON_HTTP ?? "http://127.0.0.1:7431");
 export const DAEMON_WS = import.meta.env.VITE_DAEMON_WS ?? "ws://127.0.0.1:7431/v1/ws";
 
 // El token vive en memoria y se respalda en sessionStorage para sobrevivir
@@ -65,7 +66,7 @@ export class ApiError extends Error {
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
   const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (token && !REMOTE_AUTH) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
 
   let response: Response;
@@ -133,7 +134,7 @@ export const api = {
     if (language) data.append("language", language);
     const headers: Record<string, string> = {};
     const token = getToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
+    if (token && !REMOTE_AUTH) headers.Authorization = `Bearer ${token}`;
     const response = await fetch(`${DAEMON_HTTP}/v1/asr/transcribe`, { method: "POST", headers, body: data });
     if (!response.ok) {
       const envelope = (await response.json().catch(() => null)) as ErrorEnvelope | null;
@@ -141,4 +142,9 @@ export const api = {
     }
     return response.json() as Promise<AsrResponse>;
   },
+  authMe: async () => {
+    const response = await fetch("/api/auth/me");
+    return response.ok ? (response.json() as Promise<{ authenticated: true; email: string }>) : null;
+  },
+  logout: () => fetch("/api/auth/logout", { method: "POST" }),
 };

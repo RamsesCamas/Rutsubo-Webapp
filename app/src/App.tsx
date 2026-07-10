@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { EventEnvelope } from "@bindings/EventEnvelope";
-import { api, getToken, setToken } from "./api/client";
+import { api, getToken, REMOTE_AUTH, setToken } from "./api/client";
 import { useStore } from "./state/store";
 import { DaemonSocket } from "./ws/connection";
 import { SessionSequencer } from "./ws/sequencer";
@@ -19,11 +19,21 @@ type CenterTab = "diff" | "audit";
 type MobilePane = "sesiones" | "trabajo" | "chat";
 
 export function App() {
+  if (REMOTE_AUTH) return <RemoteApp />;
   const [token, setTokenState] = useState<string | null>(() => getToken());
   if (!token) {
     return <TokenGate onToken={(t) => setTokenState(t)} />;
   }
   return <Workspace token={token} />;
+}
+
+function RemoteApp() {
+  const [email, setEmail] = useState<string | null>(null);
+  const [checked, setChecked] = useState(false);
+  useEffect(() => { void api.authMe().then((session) => { setEmail(session?.email ?? null); setChecked(true); }); }, []);
+  if (!checked) return <main className="token-gate"><p>Comprobando sesión…</p></main>;
+  if (!email) return <main className="token-gate"><h1>Rutsubo</h1><p>Inicia sesión para continuar.</p><a className="button-link" href="/api/auth/login">Continuar con Google</a></main>;
+  return <Workspace token="" remote email={email} />;
 }
 
 function TokenGate({ onToken }: { onToken: (token: string) => void }) {
@@ -57,7 +67,7 @@ function TokenGate({ onToken }: { onToken: (token: string) => void }) {
   );
 }
 
-function Workspace({ token }: { token: string }) {
+function Workspace({ token, remote = false, email }: { token: string; remote?: boolean; email?: string }) {
   const selected = useStore((s) => s.selected);
   const views = useStore((s) => s.views);
   const select = useStore((s) => s.select);
@@ -92,6 +102,10 @@ function Workspace({ token }: { token: string }) {
 
   // Ciclo de vida de la conexión WS.
   useEffect(() => {
+    if (remote) {
+      useStore.getState().setStatus("connected");
+      return;
+    }
     const socket = new DaemonSocket(token, {
       onStatus: (status) => useStore.getState().setStatus(status),
       onEvent: (event) => {
@@ -111,7 +125,7 @@ function Workspace({ token }: { token: string }) {
     socketRef.current = socket;
     socket.connect();
     return () => socket.close();
-  }, [token]);
+  }, [token, remote]);
 
   // Datos iniciales.
   useEffect(() => {
@@ -144,6 +158,7 @@ function Workspace({ token }: { token: string }) {
       <header className="topbar">
         <h1>Rutsubo</h1>
         <DaemonStatus />
+        {remote && <button type="button" onClick={() => void api.logout().then(() => location.reload())}>Salir ({email})</button>}
       </header>
 
       <nav className="mobile-tabs" aria-label="Paneles">
