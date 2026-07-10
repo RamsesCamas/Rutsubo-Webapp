@@ -100,13 +100,10 @@ function Workspace({ token, remote = false, email }: { token: string; remote?: b
     [fetchReplay],
   );
 
-  // Ciclo de vida de la conexión WS.
+  // Ciclo de vida de la conexión WS. En remoto la URL se resuelve con un
+  // ticket efímero por intento (resolveWsUrl); en local con el token.
   useEffect(() => {
-    if (remote) {
-      useStore.getState().setStatus("connected");
-      return;
-    }
-    const socket = new DaemonSocket(token, {
+    const socket = new DaemonSocket({
       onStatus: (status) => useStore.getState().setStatus(status),
       onEvent: (event) => {
         const sessionId = event.session_id;

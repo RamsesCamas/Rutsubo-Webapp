@@ -18,6 +18,7 @@ import type { SendMessageResponse } from "@bindings/SendMessageResponse";
 import type { SessionDetail } from "@bindings/SessionDetail";
 import type { SessionDto } from "@bindings/SessionDto";
 import type { SessionsPage } from "@bindings/SessionsPage";
+import type { WsTicketResponse } from "@bindings/WsTicketResponse";
 
 export const REMOTE_AUTH = import.meta.env.VITE_AUTH_MODE === "remote";
 export const DAEMON_HTTP = REMOTE_AUTH ? "/api/rutsubo" : (import.meta.env.VITE_DAEMON_HTTP ?? "http://127.0.0.1:7431");
@@ -147,4 +148,7 @@ export const api = {
     return response.ok ? (response.json() as Promise<{ authenticated: true; email: string }>) : null;
   },
   logout: () => fetch("/api/auth/logout", { method: "POST" }),
+  // Ticket efímero de un solo uso para el handshake del WS (el navegador no
+  // puede mandar Authorization en el upgrade y el BFF no proxya WebSockets).
+  wsTicket: () => request<WsTicketResponse>("POST", "/v1/ws/ticket"),
 };

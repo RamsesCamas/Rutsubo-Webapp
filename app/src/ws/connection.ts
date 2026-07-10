@@ -1,10 +1,14 @@
 // Conexión WebSocket al daemon (C-3) con reconexión automática:
 // retroceso exponencial con jitter (base 1 s, factor 2, tope 30 s), estado
 // visible para la UI (`daemon: ● conectado`) y resuscripción tras reconectar.
+//
+// La URL se resuelve de forma asíncrona en CADA intento porque en modo remoto
+// cada handshake necesita un ticket nuevo de un solo uso (el navegador no
+// puede mandar Authorization en el upgrade y el BFF no proxya WebSockets).
 
 import type { CommandEnvelope } from "@bindings/CommandEnvelope";
 import type { EventEnvelope } from "@bindings/EventEnvelope";
-import { DAEMON_WS } from "../api/client";
+import { DAEMON_WS, REMOTE_AUTH, api, getToken } from "../api/client";
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
@@ -18,6 +22,18 @@ export interface SocketHooks {
   onOpen: () => void;
 }
 
+/** URL del handshake según el modo (se evalúa por intento). */
+export async function resolveWsUrl(): Promise<string> {
+  if (REMOTE_AUTH) {
+    // Ticket efímero de un solo uso emitido por el daemon vía BFF.
+    const { ticket } = await api.wsTicket();
+    return `${DAEMON_WS}?ticket=${encodeURIComponent(ticket)}`;
+  }
+  // `?token=` solo para el handshake: la API WebSocket del navegador no
+  // permite el header Authorization (excepción local documentada en C-1/D).
+  return `${DAEMON_WS}?token=${encodeURIComponent(getToken() ?? "")}`;
+}
+
 export class DaemonSocket {
   private socket: WebSocket | null = null;
   private attempts = 0;
@@ -25,16 +41,27 @@ export class DaemonSocket {
   private timer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
-    private token: string,
     private hooks: SocketHooks,
+    private resolveUrl: () => Promise<string> = resolveWsUrl,
   ) {}
 
   connect(): void {
     this.closedByUser = false;
     this.hooks.onStatus(this.attempts === 0 ? "connecting" : "disconnected");
-    // `?token=` solo para el handshake: la API WebSocket del navegador no
-    // permite el header Authorization (excepción local documentada en C-1/D).
-    const socket = new WebSocket(`${DAEMON_WS}?token=${encodeURIComponent(this.token)}`);
+    void this.resolveUrl().then(
+      (url) => {
+        if (this.closedByUser) return;
+        this.open(url);
+      },
+      () => {
+        // Sin ticket (BFF caído o sesión vencida): reintento con backoff.
+        if (!this.closedByUser) this.scheduleReconnect();
+      },
+    );
+  }
+
+  private open(url: string): void {
+    const socket = new WebSocket(url);
     this.socket = socket;
 
     socket.onopen = () => {

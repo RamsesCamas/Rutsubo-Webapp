@@ -15,6 +15,15 @@ export default async function handler(req: any, res: any) {
   if (!api || !secret) return res.status(500).json({ error: "BFF no configurado" });
   const path = Array.isArray(req.query.path) ? req.query.path.join("/") : req.query.path ?? "";
   const url = new URL(`/${path}`, api);
+  // Vercel mezcla en req.query el segmento catch-all (`path`) con los query
+  // params originales: hay que reenviarlos todos al daemon — sin esto se
+  // pierden ?after_seq=/limit= del replay y los filtros de audit/sessions.
+  for (const [key, value] of Object.entries(req.query)) {
+    if (key === "path") continue;
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (typeof item === "string") url.searchParams.append(key, item);
+    }
+  }
   const requestBody = await body(req);
   const upstream = await fetch(url, { method: req.method, headers: { authorization: `Bearer ${secret}`, "x-rutsubo-user": email, "content-type": req.headers["content-type"] ?? "application/json" }, body: requestBody });
   res.status(upstream.status);
