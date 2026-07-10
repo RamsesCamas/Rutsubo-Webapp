@@ -19,8 +19,8 @@ import type { SessionDetail } from "@bindings/SessionDetail";
 import type { SessionDto } from "@bindings/SessionDto";
 import type { SessionsPage } from "@bindings/SessionsPage";
 
-export const DAEMON_HTTP = "http://127.0.0.1:7431";
-export const DAEMON_WS = "ws://127.0.0.1:7431/v1/ws";
+export const DAEMON_HTTP = import.meta.env.VITE_DAEMON_HTTP ?? "http://127.0.0.1:7431";
+export const DAEMON_WS = import.meta.env.VITE_DAEMON_WS ?? "ws://127.0.0.1:7431/v1/ws";
 
 // El token vive en memoria y se respalda en sessionStorage para sobrevivir
 // recargas de la pestaña. Trade-off deliberado (y documentado): jamás

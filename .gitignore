@@ -9,3 +9,4 @@ dist/
 # Reportes de auditoría: se versiona el corte oficial en docs/audits/*.json,
 # no los artefactos crudos.
 .lighthouseci/
+.vercel
