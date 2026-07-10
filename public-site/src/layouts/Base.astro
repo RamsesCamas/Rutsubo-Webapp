@@ -1,0 +1,47 @@
+---
+interface Props {
+  title: string;
+  description: string;
+}
+const { title, description } = Astro.props;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <meta name="color-scheme" content="light" />
+    <title>{title}</title>
+    <!-- Fuentes del sistema: cero peticiones de fuentes, cero FOIT (RNF-02). -->
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>
+
+<style is:global>
+  /* CSS crítico mínimo: Astro lo inline-a en el HTML (RNF-02). */
+  :root {
+    --paper: #f6f5f0;
+    --graphite: #232724;
+    --graphite-soft: #4c534e;
+    --sage: #5f7a58;
+    --sage-dark: #47603f;
+    --line: #dcdad2;
+  }
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--paper);
+    color: var(--graphite);
+    line-height: 1.6;
+  }
+  a {
+    color: var(--sage-dark);
+  }
+</style>

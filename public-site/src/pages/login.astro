@@ -1,0 +1,102 @@
+---
+// Autenticación (fase local): pide el token del daemon y lo entrega a la SPA
+// por fragmento de URL (#token=…), que nunca viaja a ningún servidor.
+//
+// PUNTO DE EXTENSIÓN (fase futura, contrato C-2): aquí vivirá el flujo de
+// cuenta del relay — POST /v1/auth/register + /v1/auth/token (correo +
+// contraseña, Argon2id) y el pairing con código de un solo uso. El formulario
+// de token local quedará como camino de "modo completamente local" (RNF-11).
+import Base from "../layouts/Base.astro";
+
+// En dev la SPA corre en 5173 (Vite); en producción se sirve junto a esta
+// superficie bajo /app/.
+const spaUrl = import.meta.env.DEV ? "http://localhost:5173/" : "/app/";
+---
+
+<Base
+  title="Rutsubo — Iniciar sesión"
+  description="Conecta la interfaz web de Rutsubo con el daemon local usando tu token."
+>
+  <main class="login">
+    <h1>Iniciar sesión</h1>
+    <p>
+      Pega el token local del daemon. Está en
+      <code>~/.local/share/rutsubo/token</code> y se generó en el primer
+      arranque.
+    </p>
+    <form id="login-form" data-spa-url={spaUrl}>
+      <label for="token">Token del daemon</label>
+      <input id="token" name="token" type="password" required autocomplete="off" />
+      <button type="submit">Conectar</button>
+    </form>
+    <p class="hint">
+      El token viaja solo en el fragmento de la URL (nunca al servidor) y se
+      guarda en <code>sessionStorage</code>: muere al cerrar la pestaña.
+    </p>
+    <p><a href="/">← volver</a></p>
+  </main>
+</Base>
+
+<script>
+  // Vanilla mínimo (no framework): entrega el token a la SPA vía #fragment.
+  const form = document.getElementById("login-form") as HTMLFormElement;
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const token = (document.getElementById("token") as HTMLInputElement).value.trim();
+    if (!token) return;
+    const spaUrl = form.dataset.spaUrl ?? "/app/";
+    window.location.href = `${spaUrl}#token=${encodeURIComponent(token)}`;
+  });
+</script>
+
+<style>
+  .login {
+    max-width: 28rem;
+    margin: 10vh auto;
+    padding: 0 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+  h1 {
+    margin: 0;
+  }
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  label {
+    font-weight: 600;
+  }
+  input {
+    font: inherit;
+    padding: 0.5rem 0.7rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fffefb;
+  }
+  button {
+    font: inherit;
+    font-weight: 600;
+    background: var(--sage);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.6rem;
+    cursor: pointer;
+  }
+  button:hover,
+  button:focus-visible {
+    background: var(--sage-dark);
+  }
+  .hint {
+    color: var(--graphite-soft);
+    font-size: 0.88rem;
+  }
+  code {
+    background: #ecefe9;
+    padding: 0 0.3em;
+    border-radius: 3px;
+  }
+</style>

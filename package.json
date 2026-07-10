@@ -1,0 +1,25 @@
+{
+  "name": "rutsubo-webapp",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Interfaz web de Rutsubo: superficie pública estática (Astro) + SPA autenticada (React 18 + Vite)",
+  "workspaces": [
+    "app",
+    "public-site"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w app",
+    "dev:site": "npm run dev -w public-site",
+    "build": "npm run build -w public-site && npm run build -w app",
+    "test": "npm run test -w app",
+    "typecheck": "npm run typecheck -w app",
+    "sync:bindings": "node scripts/sync-bindings.mjs",
+    "check:bindings": "node scripts/sync-bindings.mjs --check",
+    "ci": "npm run check:bindings && npm run typecheck && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "@puppeteer/browsers": "^3.0.6",
+    "lighthouse": "^13.4.0",
+    "puppeteer-core": "^25.3.0"
+  }
+}

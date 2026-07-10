@@ -1,0 +1,157 @@
+---
+// Landing (wireframe Etapa 1). 100 % estática, cero JavaScript de framework:
+// esta página es el sujeto de medición Lighthouse (RNF-02, ADR-002).
+import Base from "../layouts/Base.astro";
+---
+
+<Base
+  title="Rutsubo — Tu agente de código. Tu GPU. Tu workspace."
+  description="Rutsubo es un agente de código local-first: el modelo corre en tu GPU, el código nunca sale de tu equipo y apruebas cada cambio desde escritorio, web o móvil."
+>
+  <header class="hero">
+    <nav aria-label="Principal">
+      <span class="brand">Rutsubo</span>
+      <a class="nav-login" href="/login">Iniciar sesión</a>
+    </nav>
+    <h1>Tu agente de código.<br />Tu GPU. Tu workspace.</h1>
+    <p class="tagline">Nada sale de tu equipo.</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="#caracteristicas">Descargar app de escritorio</a>
+      <a class="btn btn-ghost" href="/login">Iniciar sesión</a>
+    </div>
+  </header>
+
+  <main id="caracteristicas" class="features">
+    <article>
+      <h2>Local-first, privacidad real</h2>
+      <p>
+        El cerebro es un daemon en tu equipo: ejecuta un modelo compacto sobre tu
+        propia GPU y tu código fuente jamás transita por servidores de terceros.
+        El modo estrictamente local existe y es un interruptor, no una promesa.
+      </p>
+    </article>
+    <article>
+      <h2>Fallback automático y auditable</h2>
+      <p>
+        Si el modelo local se queda sin memoria o tarda de más, una API externa
+        toma el turno — con tu permiso, notificado en la interfaz y registrado
+        en el audit log. Cada llamada dice qué proveedor la atendió.
+      </p>
+    </article>
+    <article>
+      <h2>Aprueba desde donde estés</h2>
+      <p>
+        Escribir archivos o ejecutar comandos exige tu aprobación explícita. La
+        solicitud llega a todos tus clientes —escritorio, web y móvil— y la
+        primera decisión gana, con el diff a la vista antes de decidir.
+      </p>
+    </article>
+  </main>
+
+  <footer>
+    <p>
+      Rutsubo — agente de código local-first ·
+      <a href="https://github.com/RamsesCamas/Rutsubo">backend</a> ·
+      <a href="https://github.com/RamsesCamas/Rutsubo-Webapp">interfaz web</a>
+    </p>
+  </footer>
+</Base>
+
+<style>
+  .hero {
+    background: #232724;
+    color: #f2f1ec;
+    padding: 1rem 1.5rem 4rem;
+  }
+  nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 60rem;
+    margin: 0 auto;
+  }
+  .brand {
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    font-size: 1.1rem;
+  }
+  .nav-login {
+    color: #cdd8c8;
+    text-decoration: none;
+    border: 1px solid #4c534e;
+    border-radius: 6px;
+    padding: 0.3rem 0.8rem;
+  }
+  .nav-login:hover,
+  .nav-login:focus-visible {
+    border-color: #cdd8c8;
+  }
+  h1 {
+    max-width: 60rem;
+    margin: 3.5rem auto 0;
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    line-height: 1.15;
+  }
+  .tagline {
+    max-width: 60rem;
+    margin: 0.8rem auto 2rem;
+    color: #b9c4b4;
+    font-size: 1.15rem;
+  }
+  .cta {
+    max-width: 60rem;
+    margin: 0 auto;
+    display: flex;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+  }
+  .btn {
+    display: inline-block;
+    text-decoration: none;
+    border-radius: 8px;
+    padding: 0.6rem 1.2rem;
+    font-weight: 600;
+  }
+  .btn-primary {
+    background: #5f7a58;
+    color: #fff;
+  }
+  .btn-primary:hover,
+  .btn-primary:focus-visible {
+    background: #47603f;
+  }
+  .btn-ghost {
+    border: 1px solid #4c534e;
+    color: #f2f1ec;
+  }
+  .features {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: 3rem 1.5rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 1.5rem;
+  }
+  .features article {
+    background: #fffefb;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 1.2rem 1.4rem;
+  }
+  .features h2 {
+    font-size: 1.1rem;
+    margin: 0 0 0.5rem;
+    color: var(--sage-dark);
+  }
+  .features p {
+    margin: 0;
+    color: var(--graphite-soft);
+  }
+  footer {
+    border-top: 1px solid var(--line);
+    padding: 1.2rem 1.5rem 2rem;
+    text-align: center;
+    color: var(--graphite-soft);
+    font-size: 0.9rem;
+  }
+</style>
