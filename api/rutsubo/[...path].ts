@@ -1,11 +1,12 @@
 import { verifySession } from "../_auth";
 
 export const config = { api: { bodyParser: false } };
-async function body(req: any): Promise<Buffer | undefined> {
+// Uint8Array (no Buffer): es lo que el tipo BodyInit de fetch acepta.
+async function body(req: any): Promise<Uint8Array | undefined> {
   if (["GET", "HEAD"].includes(req.method ?? "GET")) return undefined;
   const parts: Buffer[] = [];
   for await (const chunk of req) parts.push(Buffer.from(chunk));
-  return Buffer.concat(parts);
+  return new Uint8Array(Buffer.concat(parts));
 }
 export default async function handler(req: any, res: any) {
   const email = await verifySession(req.headers.cookie);
