@@ -31,3 +31,13 @@ de Servicio* (ADR-001…008, C-1…C-4). Jerarquía: **C-n > ADR-n > handoff**.
 5. **Estado derivado por reducción de eventos.** El store (Zustand) reduce
    `EventEnvelope` → vista; el replay tras reconexión reutiliza el mismo
    camino (sin sincronización ad hoc).
+6. **WS remoto con tickets efímeros.** El BFF (serverless) no proxya
+   WebSockets y el navegador no puede mandar `Authorization` en el upgrade:
+   la SPA pide `POST /api/rutsubo/v1/ws/ticket` (cookie HttpOnly → proxy →
+   daemon) y abre el `wss://` de Railway con `?ticket=` (un solo uso, 60 s).
+   `DaemonSocket` resuelve la URL en cada intento — ticket nuevo por
+   reconexión; en local se conserva `?token=`.
+7. **El proxy BFF reenvía el query string.** Vercel mezcla el catch-all
+   `path` con los params originales en `req.query`; el proxy reconstruye la
+   URL upstream con todos menos `path` (sin esto se perdían `after_seq`/
+   `limit` del replay y los filtros de audit/sessions).
