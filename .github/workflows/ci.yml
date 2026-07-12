@@ -1,0 +1,30 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      # check:bindings y check:contract comparan contra ../Rutsubo, que no está
+      # presente en el runner: se verifican contra la copia vendorizada.
+      - name: Gate (typecheck, tests, build, secretos)
+        run: |
+          npm run typecheck
+          npm test
+          npm run build
+          npm run check:secrets
+      # El contrato vendorizado debe tener el pin de VERSION alineado.
+      - name: Guard del pin de contrato
+        run: |
+          version=$(cat contract/VERSION)
+          pin=$(node -e "process.stdout.write(String(require('./package.json').contractVersion))")
+          test "$version" = "$pin" || (echo "::error::contractVersion=$pin != contract/VERSION=$version" && exit 1)
