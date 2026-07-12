@@ -15,9 +15,12 @@
     "typecheck": "npm run typecheck -w app",
     "sync:bindings": "node scripts/sync-bindings.mjs",
     "check:bindings": "node scripts/sync-bindings.mjs --check",
+    "sync:contract": "node scripts/sync-contract.mjs",
+    "check:contract": "node scripts/sync-contract.mjs --check",
     "check:secrets": "! rg -q 'gsk_' app/dist public-site/dist 2>/dev/null",
-    "ci": "npm run check:bindings && npm run typecheck && npm run test && npm run build && npm run check:secrets"
+    "ci": "npm run check:bindings && npm run check:contract && npm run typecheck && npm run test && npm run build && npm run check:secrets"
   },
+  "contractVersion": 2,
   "devDependencies": {
     "@puppeteer/browsers": "^3.0.6",
     "lighthouse": "^13.4.0",

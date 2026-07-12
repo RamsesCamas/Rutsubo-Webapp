@@ -24,6 +24,28 @@ export const REMOTE_AUTH = import.meta.env.VITE_AUTH_MODE === "remote";
 export const DAEMON_HTTP = REMOTE_AUTH ? "/api/rutsubo" : (import.meta.env.VITE_DAEMON_HTTP ?? "http://127.0.0.1:7431");
 export const DAEMON_WS = import.meta.env.VITE_DAEMON_WS ?? "ws://127.0.0.1:7431/v1/ws";
 
+// Shell de escritorio (ADR-002: la SPA no se bifurca — un solo build sirve
+// navegador y Tauri, distinguidos por detección en runtime). El shell activa
+// `withGlobalTauri`, así que no hay dependencia npm nueva.
+export const IS_TAURI = typeof window !== "undefined" && "__TAURI__" in window;
+
+type TauriGlobal = { core: { invoke: (cmd: string) => Promise<unknown> } };
+
+/** Pide al lado Rust del shell el token local del daemon (comando
+ *  `get_local_token`). El token viaja solo en memoria: nunca query string,
+ *  archivo del frontend ni variable global persistente. `null` = fallo →
+ *  la SPA cae al TokenGate normal. */
+export async function fetchTauriToken(): Promise<string | null> {
+  try {
+    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    if (!tauri) return null;
+    const token = await tauri.core.invoke("get_local_token");
+    return typeof token === "string" && token.length > 0 ? token : null;
+  } catch {
+    return null;
+  }
+}
+
 // El token vive en memoria y se respalda en sessionStorage para sobrevivir
 // recargas de la pestaña. Trade-off deliberado (y documentado): jamás
 // localStorage —persistiría entre sesiones del navegador y ampliaría la

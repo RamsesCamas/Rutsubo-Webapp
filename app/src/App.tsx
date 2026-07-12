@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { EventEnvelope } from "@bindings/EventEnvelope";
-import { api, getToken, REMOTE_AUTH, setToken } from "./api/client";
+import { api, fetchTauriToken, getToken, IS_TAURI, REMOTE_AUTH, setToken } from "./api/client";
 import { useStore } from "./state/store";
 import { DaemonSocket } from "./ws/connection";
 import { SessionSequencer } from "./ws/sequencer";
@@ -20,11 +20,40 @@ type MobilePane = "sesiones" | "trabajo" | "chat";
 
 export function App() {
   if (REMOTE_AUTH) return <RemoteApp />;
+  if (IS_TAURI) return <TauriApp />;
   const [token, setTokenState] = useState<string | null>(() => getToken());
   if (!token) {
     return <TokenGate onToken={(t) => setTokenState(t)} />;
   }
   return <Workspace token={token} />;
+}
+
+/// Dentro del shell Tauri el login desaparece: el token lo entrega el lado
+/// Rust (`get_local_token`) y vive en memoria. Si el comando falla, se cae al
+/// TokenGate normal — mismo artefacto, cero bifurcación de build (ADR-002).
+function TauriApp() {
+  const [token, setTokenState] = useState<string | null>(() => getToken());
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (token) return;
+    void fetchTauriToken().then((fetched) => {
+      if (fetched) {
+        setToken(fetched);
+        setTokenState(fetched);
+      } else {
+        setFailed(true);
+      }
+    });
+  }, [token]);
+  if (token) return <Workspace token={token} />;
+  if (failed) return <TokenGate onToken={(t) => setTokenState(t)} />;
+  return (
+    <main className="login-screen">
+      <section className="login-card" aria-busy="true">
+        <p className="login-hint">Conectando con el daemon…</p>
+      </section>
+    </main>
+  );
 }
 
 function RemoteApp() {
