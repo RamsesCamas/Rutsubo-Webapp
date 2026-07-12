@@ -558,3 +558,124 @@ button:focus-visible {
   color: var(--graphite-soft);
   font-size: 0.8rem;
 }
+
+/* ---- Ajustes / selector de carpeta (API key + explorador) ---- */
+.icon-btn {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.3rem 0.55rem;
+  color: var(--graphite);
+}
+.icon-btn:hover {
+  background: var(--sage-soft);
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 22, 20, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+.modal {
+  background: var(--paper-raised);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  width: min(90vw, 420px);
+  max-height: 80vh;
+  overflow: auto;
+  padding: 1rem 1.25rem 1.25rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modal-head h2 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+.settings-section h3 {
+  font-size: 0.95rem;
+  margin: 0.75rem 0 0.35rem;
+}
+.settings-section input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin: 0.35rem 0;
+}
+.settings-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+.hint {
+  font-size: 0.85rem;
+  color: var(--graphite-soft);
+  margin: 0.25rem 0;
+}
+.hint.small {
+  font-size: 0.78rem;
+}
+button.ghost {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--graphite);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+}
+button.ghost:hover {
+  background: var(--sage-soft);
+}
+.workspace-field {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.workspace-field input {
+  flex: 1;
+  min-width: 0;
+}
+.folder-current {
+  font-size: 0.8rem;
+  color: var(--graphite-soft);
+  margin: 0.5rem 0;
+  word-break: break-all;
+}
+.folder-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 45vh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.folder-list li button {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  padding: 0.5rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.folder-list li button:hover {
+  background: var(--sage-soft);
+}
+.folder-list li.empty {
+  padding: 0.6rem;
+  color: var(--graphite-soft);
+  font-size: 0.85rem;
+}

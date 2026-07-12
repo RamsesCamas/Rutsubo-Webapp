@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { api } from "../api/client";
 import { useStore } from "../state/store";
+import { FolderPicker } from "./FolderPicker";
 
 export function SessionList({ onSelect }: { onSelect: (id: string) => void }) {
   const sessions = useStore((s) => s.sessions);
@@ -54,13 +55,16 @@ export function SessionList({ onSelect }: { onSelect: (id: string) => void }) {
 
       <form className="new-session" onSubmit={create}>
         <h3>Nueva sesión</h3>
-        <input
-          value={workspace}
-          onChange={(e) => setWorkspace(e.target.value)}
-          placeholder="/ruta/absoluta/al/workspace"
-          required
-          aria-label="Ruta del workspace"
-        />
+        <div className="workspace-field">
+          <input
+            value={workspace}
+            onChange={(e) => setWorkspace(e.target.value)}
+            placeholder="carpeta del proyecto"
+            required
+            aria-label="Carpeta del workspace"
+          />
+          <FolderPicker onPick={(path) => setWorkspace(path)} />
+        </div>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}

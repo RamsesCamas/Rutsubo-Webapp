@@ -10,6 +10,7 @@ import { DaemonSocket } from "./ws/connection";
 import { SessionSequencer } from "./ws/sequencer";
 import { AuditLog } from "./ui/AuditLog";
 import { DaemonStatus } from "./ui/DaemonStatus";
+import { SettingsModal } from "./ui/SettingsModal";
 import { MicButton } from "./ui/MicButton";
 import { DiffViewer } from "./ui/DiffViewer";
 import { MessageStream } from "./ui/MessageStream";
@@ -152,6 +153,7 @@ function Workspace({ token, remote = false, email }: { token: string; remote?: b
   const select = useStore((s) => s.select);
   const [centerTab, setCenterTab] = useState<CenterTab>("diff");
   const [mobilePane, setMobilePane] = useState<MobilePane>("sesiones");
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const socketRef = useRef<DaemonSocket | null>(null);
   const sequencersRef = useRef(new Map<string, SessionSequencer>());
@@ -234,8 +236,10 @@ function Workspace({ token, remote = false, email }: { token: string; remote?: b
       <header className="topbar">
         <h1>Rutsubo</h1>
         <DaemonStatus />
+        <button type="button" className="icon-btn" onClick={() => setSettingsOpen(true)} aria-label="Ajustes" title="Ajustes">⚙</button>
         {remote && <button type="button" onClick={() => void api.logout().then(() => location.reload())}>Salir ({email})</button>}
       </header>
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
 
       <nav className="mobile-tabs" aria-label="Paneles">
         {(["sesiones", "trabajo", "chat"] as const).map((pane) => (

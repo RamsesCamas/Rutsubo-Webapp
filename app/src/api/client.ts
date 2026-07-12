@@ -7,6 +7,8 @@ import type { AsrResponse } from "@bindings/AsrResponse";
 import type { CreateSessionRequest } from "@bindings/CreateSessionRequest";
 import type { DecisionRequest } from "@bindings/DecisionRequest";
 import type { DecisionResponse } from "@bindings/DecisionResponse";
+import type { DirListing } from "@bindings/DirListing";
+import type { ProviderKeyStatus } from "@bindings/ProviderKeyStatus";
 import type { ErrorEnvelope } from "@bindings/ErrorEnvelope";
 import type { EventsPage } from "@bindings/EventsPage";
 import type { HealthResponse } from "@bindings/HealthResponse";
@@ -41,6 +43,19 @@ export async function fetchTauriToken(): Promise<string | null> {
     if (!tauri) return null;
     const token = await tauri.core.invoke("get_local_token");
     return typeof token === "string" && token.length > 0 ? token : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Abre el diálogo NATIVO de selección de carpeta del sistema (solo Tauri).
+ *  Devuelve la ruta absoluta elegida, o null si se canceló / no es Tauri. */
+export async function pickFolderNative(): Promise<string | null> {
+  try {
+    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    if (!tauri) return null;
+    const path = await tauri.core.invoke("pick_folder");
+    return typeof path === "string" && path.length > 0 ? path : null;
   } catch {
     return null;
   }
@@ -142,6 +157,13 @@ export const api = {
   rules: () => request<RulesPage>("GET", "/v1/rules"),
   modelConfig: () => request<ModelConfig>("GET", "/v1/config/model"),
   putModelConfig: (cfg: ModelConfig) => request<ModelConfig>("PUT", "/v1/config/model", cfg),
+  // Credencial del proveedor: estado (nunca la key) y configuración.
+  providerStatus: () => request<ProviderKeyStatus>("GET", "/v1/config/provider"),
+  setProviderKey: (groq_api_key: string | null) =>
+    request<ProviderKeyStatus>("PUT", "/v1/config/provider", { groq_api_key }),
+  // Explorador de directorios para el selector de carpeta (web).
+  browse: (path?: string) =>
+    request<DirListing>("GET", `/v1/fs/list${path ? `?path=${encodeURIComponent(path)}` : ""}`),
   audit: (params: { cursor?: string; session_id?: string; provider?: string; limit?: number }) => {
     const query = new URLSearchParams();
     if (params.cursor) query.set("cursor", params.cursor);

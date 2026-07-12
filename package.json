@@ -20,7 +20,7 @@
     "check:secrets": "! rg -q 'gsk_' app/dist public-site/dist 2>/dev/null",
     "ci": "npm run check:bindings && npm run check:contract && npm run typecheck && npm run test && npm run build && npm run check:secrets"
   },
-  "contractVersion": 2,
+  "contractVersion": 3,
   "devDependencies": {
     "@puppeteer/browsers": "^3.0.6",
     "lighthouse": "^13.4.0",
