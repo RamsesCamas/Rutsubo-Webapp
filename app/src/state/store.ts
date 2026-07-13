@@ -4,6 +4,7 @@
 
 import { create } from "zustand";
 import type { EventEnvelope } from "@bindings/EventEnvelope";
+import type { OutboxItem } from "@bindings/OutboxItem";
 import type { ProviderStatus } from "@bindings/ProviderStatus";
 import type { SessionDto } from "@bindings/SessionDto";
 import type { SessionState } from "@bindings/SessionState";
@@ -69,6 +70,11 @@ interface AppStore {
   sessions: SessionDto[];
   selected: string | null;
   views: Record<string, SessionView>;
+  /** Buzón de tareas offline (solo transporte relay). */
+  outbox: OutboxItem[];
+  /** El escritorio está offline: en relay lo marca `daemon_unavailable` o un
+   *  encolado que quedó `queued`. Cambia el rótulo Enviar→Encolar. */
+  daemonOffline: boolean;
 
   setStatus: (status: ConnectionStatus) => void;
   setProvider: (provider: ProviderStatus | null) => void;
@@ -76,6 +82,8 @@ interface AppStore {
   upsertSession: (session: SessionDto) => void;
   select: (sessionId: string | null) => void;
   setGapFilling: (sessionId: string, filling: boolean) => void;
+  setOutbox: (outbox: OutboxItem[]) => void;
+  setDaemonOffline: (offline: boolean) => void;
   /** Mensaje del usuario: local (los comandos no producen evento propio). */
   addUserMessage: (sessionId: string, id: string, text: string) => void;
   /** Reducción de un evento C-3 al estado de la vista. */
@@ -88,8 +96,12 @@ export const useStore = create<AppStore>((set) => ({
   sessions: [],
   selected: null,
   views: {},
+  outbox: [],
+  daemonOffline: false,
 
   setStatus: (status) => set({ status }),
+  setOutbox: (outbox) => set({ outbox }),
+  setDaemonOffline: (daemonOffline) => set({ daemonOffline }),
   setProvider: (provider) => set({ provider }),
   setSessions: (sessions) => set({ sessions }),
   upsertSession: (session) =>
@@ -121,11 +133,17 @@ export const useStore = create<AppStore>((set) => ({
   applyEvent: (event) =>
     set((store) => {
       const sessionId = event.session_id;
-      if (!sessionId) return {}; // globales: sin vista por sesión en fase local
+      if (!sessionId) {
+        // Globales: `daemon_unavailable` es presencia (relay) → escritorio offline.
+        if (event.type === "daemon_unavailable") return { daemonOffline: true };
+        return {};
+      }
+      // Llega un evento vivo de una sesión ⇒ el escritorio está online.
       const view = reduce(store.views[sessionId] ?? emptyView(), event);
       const patch: Partial<AppStore> = {
         views: { ...store.views, [sessionId]: view },
       };
+      if (store.daemonOffline) patch.daemonOffline = false;
       if (event.type === "session_state") {
         patch.sessions = store.sessions.map((s) =>
           s.id === sessionId

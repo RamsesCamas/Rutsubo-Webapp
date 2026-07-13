@@ -3,11 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- CSP de la SPA (requisito del corte ZAP): sin scripts externos; la
-         API y el WS viven en 127.0.0.1:7431. -->
+    <!-- CSP de la SPA (corte ZAP). Local: daemon en 127.0.0.1:7431. Relay C-2:
+         relay en 127.0.0.1:8443 (dev; en producción, añade tu host de relay).
+         Google Sign-In (GIS) es el único script externo permitido, y solo para
+         el login del relay (handoff M0). -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; connect-src 'self' http://127.0.0.1:7431 ws://127.0.0.1:7431; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'"
+      content="default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; connect-src 'self' http://127.0.0.1:7431 ws://127.0.0.1:7431 http://127.0.0.1:8443 ws://127.0.0.1:8443 https://accounts.google.com; frame-src https://accounts.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'"
     />
     <meta name="color-scheme" content="light dark" />
     <title>Rutsubo — Sesiones</title>

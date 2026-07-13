@@ -2,6 +2,9 @@ node_modules/
 dist/
 .astro/
 *.local
+# Config local (copiar de .env.example). Los client IDs no son secretos, pero
+# el .env real no se versiona (sigue el patrón .example de todo el proyecto).
+.env
 
 # Perfiles temporales de Chrome que deja cada corrida de Lighthouse
 # (el nombre puede venir con ruta de Windows: C:\...\lighthouse.NNNN/).

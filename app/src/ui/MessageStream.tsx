@@ -6,7 +6,7 @@ import { useEffect, useRef } from "react";
 import type { SessionView } from "../state/store";
 import { ApprovalCard } from "./ApprovalCard";
 
-export function MessageStream({ view }: { view: SessionView }) {
+export function MessageStream({ view, sessionId }: { view: SessionView; sessionId: string }) {
   const scroller = useRef<HTMLDivElement>(null);
   const pinnedToBottom = useRef(true);
 
@@ -46,7 +46,7 @@ export function MessageStream({ view }: { view: SessionView }) {
         </p>
       ))}
       {view.approvals.map((a) => (
-        <ApprovalCard key={a.approvalId} approval={a} />
+        <ApprovalCard key={a.approvalId} approval={a} sessionId={sessionId} />
       ))}
       {view.gapFilling && <p className="notice">recuperando eventos…</p>}
     </div>

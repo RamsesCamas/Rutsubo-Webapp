@@ -679,3 +679,88 @@ button.ghost:hover {
   color: var(--graphite-soft);
   font-size: 0.85rem;
 }
+
+/* ---- Relay: buzón, encolar y login (M1+M2) ---- */
+.login-local,
+.login-dev {
+  width: 100%;
+  margin-top: 0.6rem;
+  font-size: 0.9rem;
+}
+.login-local > summary,
+.login-dev > summary {
+  cursor: pointer;
+  color: var(--graphite-soft);
+}
+.login-dev-form {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+.login-dev-form input {
+  flex: 1;
+}
+
+.relay-new-task {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+.relay-new-task textarea {
+  resize: vertical;
+  font: inherit;
+}
+
+.outbox {
+  padding: 0.4rem 0.6rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+.outbox-header {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--graphite-soft);
+  margin-bottom: 0.3rem;
+}
+.outbox-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.outbox-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  background: var(--sage-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.outbox-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.outbox-title {
+  font-weight: 600;
+}
+.outbox-sub {
+  font-size: 0.8rem;
+  color: var(--graphite-soft);
+}
+.outbox-cancel {
+  flex: none;
+  background: transparent;
+  color: var(--danger);
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0 0.3rem;
+}

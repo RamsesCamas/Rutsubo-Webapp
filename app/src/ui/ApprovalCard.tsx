@@ -4,10 +4,18 @@
 // del store la elimina; aquí solo se deshabilita mientras la decisión viaja.
 
 import { useState } from "react";
-import { ApiError, api } from "../api/client";
+import { ApiError } from "../api/client";
+import { useTransport } from "../api/transport";
 import type { PendingApproval } from "../state/store";
 
-export function ApprovalCard({ approval }: { approval: PendingApproval }) {
+export function ApprovalCard({
+  approval,
+  sessionId,
+}: {
+  approval: PendingApproval;
+  sessionId: string;
+}) {
+  const transport = useTransport();
   const [rememberRule, setRememberRule] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -16,11 +24,8 @@ export function ApprovalCard({ approval }: { approval: PendingApproval }) {
     setBusy(true);
     setError(null);
     try {
-      await api.decide(approval.approvalId, {
-        decision,
-        reason: null,
-        remember_rule: rememberRule,
-      });
+      // REST → POST; relay → comando WS reenviado al daemon (mismo efecto).
+      await transport.decide(sessionId, approval.approvalId, decision, rememberRule);
       // No retiramos la tarjeta aquí: la retira approval_resolved (RF-17).
     } catch (err) {
       if (err instanceof ApiError && err.code === "conflict") {

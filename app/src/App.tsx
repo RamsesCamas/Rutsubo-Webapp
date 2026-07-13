@@ -2,14 +2,26 @@
 // sesiones + estado del daemon | visor de diff | conversación con tarjetas
 // de aprobación inline. En <1024 px los paneles colapsan a tabs.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EventEnvelope } from "@bindings/EventEnvelope";
 import { api, fetchTauriToken, getToken, IS_TAURI, REMOTE_AUTH, setToken } from "./api/client";
+import {
+  GOOGLE_CLIENT_ID,
+  getRelayEmail,
+  getRelayToken,
+  relayApi,
+  relaySubscribeUrl,
+  setRelayEmail,
+  setRelayToken,
+} from "./api/relay";
+import { googleIdToken } from "./api/google";
+import { relayTransport, restTransport, TransportProvider, useTransport } from "./api/transport";
 import { useStore } from "./state/store";
 import { DaemonSocket } from "./ws/connection";
 import { SessionSequencer } from "./ws/sequencer";
 import { AuditLog } from "./ui/AuditLog";
 import { DaemonStatus } from "./ui/DaemonStatus";
+import { OutboxCard } from "./ui/OutboxCard";
 import { SettingsModal } from "./ui/SettingsModal";
 import { MicButton } from "./ui/MicButton";
 import { DiffViewer } from "./ui/DiffViewer";
@@ -22,11 +34,117 @@ type MobilePane = "sesiones" | "trabajo" | "chat";
 export function App() {
   if (REMOTE_AUTH) return <RemoteApp />;
   if (IS_TAURI) return <TauriApp />;
-  const [token, setTokenState] = useState<string | null>(() => getToken());
-  if (!token) {
-    return <TokenGate onToken={(t) => setTokenState(t)} />;
+  return <LocalApp />;
+}
+
+/// Navegador sin BFF: dos transportes. Relay (Google Sign-In → device_token →
+/// las mismas sesiones que el móvil/escritorio, RNF-10) o Local (token del
+/// daemon en la misma máquina, RNF-11). Se reanuda la sesión previa: el
+/// device_token del relay tiene prioridad sobre el token local.
+function LocalApp() {
+  const [session, setSession] = useState<{ relay: boolean; email?: string } | null>(() => {
+    if (getRelayToken()) return { relay: true, email: getRelayEmail() ?? undefined };
+    if (getToken()) return { relay: false };
+    return null;
+  });
+  if (!session) return <LoginGate onDone={setSession} />;
+  if (session.relay) {
+    return <Workspace token={getRelayToken() ?? ""} relay email={session.email} />;
   }
-  return <Workspace token={token} />;
+  return <Workspace token={getToken() ?? ""} />;
+}
+
+function LoginGate({ onDone }: { onDone: (s: { relay: boolean; email?: string }) => void }) {
+  return (
+    <main className="login-screen">
+      <section className="login-card">
+        <span className="login-mark" aria-hidden="true" />
+        <h1>Rutsubo</h1>
+        <p className="login-tagline">Tu agente de código. Tu GPU. Tu workspace.</p>
+        <RelayLogin onDone={(email) => onDone({ relay: true, email })} />
+        <details className="login-local">
+          <summary>Conectar al daemon local con token</summary>
+          <TokenGate onToken={() => onDone({ relay: false })} />
+        </details>
+      </section>
+    </main>
+  );
+}
+
+/// Login del relay: Google (id_token → canje → device_token) y una sección
+/// "dev" (id_token de prueba `dev:sub:correo`) para verificar contra un relay
+/// con RELAY_GOOGLE_DEV=1 sin depender del client ID real (handoff M0).
+function RelayLogin({ onDone }: { onDone: (email: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [devEmail, setDevEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const exchange = useCallback(
+    async (idToken: string, email: string) => {
+      setBusy(true);
+      setError(null);
+      try {
+        const { device_token } = await relayApi.googleExchange(idToken, "Navegador");
+        setRelayToken(device_token);
+        setRelayEmail(email);
+        onDone(email);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [onDone],
+  );
+
+  async function google() {
+    setBusy(true);
+    setError(null);
+    try {
+      const { idToken, email } = await googleIdToken(GOOGLE_CLIENT_ID);
+      await exchange(idToken, email);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setBusy(false);
+    }
+  }
+
+  function dev(e: React.FormEvent) {
+    e.preventDefault();
+    const email = devEmail.trim();
+    if (!email.includes("@")) {
+      setError("correo inválido");
+      return;
+    }
+    void exchange(`dev:sub-${email}:${email}`, email);
+  }
+
+  return (
+    <>
+      {GOOGLE_CLIENT_ID ? (
+        <button type="button" className="google-btn" disabled={busy} onClick={() => void google()}>
+          <GoogleMark />
+          <span>{busy ? "Entrando…" : "Continuar con Google"}</span>
+        </button>
+      ) : (
+        <p className="login-hint">Configura VITE_GOOGLE_CLIENT_ID para el login de Google.</p>
+      )}
+      <details className="login-dev">
+        <summary>Modo desarrollador (relay dev)</summary>
+        <form onSubmit={dev} className="login-dev-form">
+          <input
+            type="email"
+            value={devEmail}
+            onChange={(e) => setDevEmail(e.target.value)}
+            placeholder="correo (login dev)"
+            aria-label="Correo para login dev"
+          />
+          <button type="submit" disabled={busy}>Entrar (dev)</button>
+        </form>
+      </details>
+      {error && <p className="error-text">{error}</p>}
+    </>
+  );
 }
 
 /// Dentro del shell Tauri el login desaparece: el token lo entrega el lado
@@ -147,7 +265,17 @@ function TokenGate({ onToken }: { onToken: (token: string) => void }) {
   );
 }
 
-function Workspace({ token, remote = false, email }: { token: string; remote?: boolean; email?: string }) {
+function Workspace({
+  token,
+  remote = false,
+  relay = false,
+  email,
+}: {
+  token: string;
+  remote?: boolean;
+  relay?: boolean;
+  email?: string;
+}) {
   const selected = useStore((s) => s.selected);
   const views = useStore((s) => s.views);
   const select = useStore((s) => s.select);
@@ -158,11 +286,36 @@ function Workspace({ token, remote = false, email }: { token: string; remote?: b
   const socketRef = useRef<DaemonSocket | null>(null);
   const sequencersRef = useRef(new Map<string, SessionSequencer>());
 
-  // Replay REST para el relleno de huecos del secuenciador (C-3 §3.3.5).
-  const fetchReplay = useCallback(async (sessionId: string, afterSeq: number) => {
-    const page = await api.events(sessionId, afterSeq);
-    return page.events as EventEnvelope[];
-  }, []);
+  // Refresca el buzón (relay). Se llama al conectar y ante `task_dequeued`.
+  const refreshOutbox = useCallback(async () => {
+    if (!relay) return;
+    try {
+      const page = await relayApi.outbox();
+      useStore.getState().setOutbox(page.items);
+      // Tareas `queued` ⇒ escritorio offline; un buzón vacío NO implica online
+      // (la presencia la marca `daemon_unavailable`), así que aquí solo subimos.
+      if (page.items.some((t) => t.state === "queued")) {
+        useStore.getState().setDaemonOffline(true);
+      }
+    } catch {
+      /* sin relay: conservar lo último */
+    }
+  }, [relay]);
+
+  // Relleno de huecos del secuenciador (C-3 §3.3.5). REST: replay por HTTP.
+  // Relay: sin REST (RNF-10) → re-emitir `subscribe_session`; el daemon
+  // unicasta el backlog por el mismo canal (no hay respuesta síncrona aquí).
+  const fetchReplay = useCallback(
+    async (sessionId: string, afterSeq: number) => {
+      if (relay) {
+        socketRef.current?.subscribe(sessionId, afterSeq);
+        return [] as EventEnvelope[];
+      }
+      const page = await api.events(sessionId, afterSeq);
+      return page.events as EventEnvelope[];
+    },
+    [relay],
+  );
 
   const ensureSequencer = useCallback(
     (sessionId: string, afterSeq: number) => {
@@ -181,32 +334,47 @@ function Workspace({ token, remote = false, email }: { token: string; remote?: b
     [fetchReplay],
   );
 
-  // Ciclo de vida de la conexión WS. En remoto la URL se resuelve con un
-  // ticket efímero por intento (resolveWsUrl); en local con el token.
+  // Ciclo de vida de la conexión WS. Remoto: ticket efímero por intento; local:
+  // token del daemon; relay: WSS `/v1/subscribe?token=<device_token>`.
   useEffect(() => {
-    const socket = new DaemonSocket({
-      onStatus: (status) => useStore.getState().setStatus(status),
-      onEvent: (event) => {
-        const sessionId = event.session_id;
-        if (!sessionId) return;
-        const sequencer = sequencersRef.current.get(sessionId);
-        void sequencer?.push(event);
+    const socket = new DaemonSocket(
+      {
+        onStatus: (status) => useStore.getState().setStatus(status),
+        onEvent: (event) => {
+          const sessionId = event.session_id;
+          if (!sessionId) {
+            // Globales (relay): `daemon_unavailable` = presencia → escritorio offline.
+            useStore.getState().applyEvent(event);
+            return;
+          }
+          // Una tarea encolada se drenó: refrescar el buzón para retirarla (RF-17).
+          if (event.type === "task_dequeued") void refreshOutbox();
+          const sequencer = sequencersRef.current.get(sessionId);
+          void sequencer?.push(event);
+        },
+        onOpen: () => {
+          // Resuscripción tras (re)conectar, desde el último seq procesado:
+          // el daemon repone lo faltante y empalma sin duplicar.
+          for (const [sessionId, sequencer] of sequencersRef.current) {
+            socket.subscribe(sessionId, sequencer.processedSeq);
+          }
+        },
       },
-      onOpen: () => {
-        // Resuscripción tras (re)conectar, desde el último seq procesado:
-        // el daemon repone lo faltante y empalma sin duplicar.
-        for (const [sessionId, sequencer] of sequencersRef.current) {
-          socket.subscribe(sessionId, sequencer.processedSeq);
-        }
-      },
-    });
+      relay ? () => Promise.resolve(relaySubscribeUrl()) : undefined,
+    );
     socketRef.current = socket;
     socket.connect();
     return () => socket.close();
-  }, [token, remote]);
+  }, [token, remote, relay, refreshOutbox]);
 
-  // Datos iniciales.
+  // Datos iniciales. Relay: sin REST (RNF-10) → poblar del flujo difundido + el
+  // buzón. REST: health (proveedor) + lista de sesiones.
   useEffect(() => {
+    if (relay) {
+      useStore.getState().setProvider(null);
+      void refreshOutbox();
+      return;
+    }
     void api
       .health()
       .then((h) => useStore.getState().setProvider(h.provider))
@@ -215,7 +383,17 @@ function Workspace({ token, remote = false, email }: { token: string; remote?: b
       .listSessions()
       .then((page) => useStore.getState().setSessions(page.sessions))
       .catch(() => {});
-  }, []);
+  }, [relay, refreshOutbox]);
+
+  // Transporte de comandos (aprobar/enviar) para los hijos vía contexto. El
+  // socket se lee perezosamente porque se crea en el efecto de conexión.
+  const transport = useMemo(
+    () =>
+      relay
+        ? relayTransport(() => socketRef.current, () => void refreshOutbox())
+        : restTransport(),
+    [relay, refreshOutbox],
+  );
 
   const onSelect = useCallback(
     (sessionId: string) => {
@@ -231,94 +409,143 @@ function Workspace({ token, remote = false, email }: { token: string; remote?: b
 
   const view = selected ? views[selected] : undefined;
 
+  function signOutRelay() {
+    setRelayToken(null);
+    setRelayEmail(null);
+    location.reload();
+  }
+
   return (
-    <div className="shell">
-      <header className="topbar">
-        <h1>Rutsubo</h1>
-        <DaemonStatus />
-        <button type="button" className="icon-btn" onClick={() => setSettingsOpen(true)} aria-label="Ajustes" title="Ajustes">⚙</button>
-        {remote && <button type="button" onClick={() => void api.logout().then(() => location.reload())}>Salir ({email})</button>}
-      </header>
-      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+    <TransportProvider value={transport}>
+      <div className="shell">
+        <header className="topbar">
+          <h1>Rutsubo</h1>
+          <DaemonStatus />
+          <button type="button" className="icon-btn" onClick={() => setSettingsOpen(true)} aria-label="Ajustes" title="Ajustes">⚙</button>
+          {remote && <button type="button" onClick={() => void api.logout().then(() => location.reload())}>Salir ({email})</button>}
+          {relay && <button type="button" onClick={signOutRelay}>Salir{email ? ` (${email})` : ""}</button>}
+        </header>
+        {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
 
-      <nav className="mobile-tabs" aria-label="Paneles">
-        {(["sesiones", "trabajo", "chat"] as const).map((pane) => (
-          <button
-            key={pane}
-            type="button"
-            className={mobilePane === pane ? "active" : ""}
-            onClick={() => setMobilePane(pane)}
-          >
-            {pane}
-          </button>
-        ))}
-      </nav>
-
-      <main className="panels">
-        <aside className={`panel panel-left ${mobilePane === "sesiones" ? "visible" : ""}`}>
-          <SessionList onSelect={onSelect} />
-        </aside>
-
-        <section className={`panel panel-center ${mobilePane === "trabajo" ? "visible" : ""}`}>
-          <div className="center-tabs" role="tablist">
+        <nav className="mobile-tabs" aria-label="Paneles">
+          {(["sesiones", "trabajo", "chat"] as const).map((pane) => (
             <button
+              key={pane}
               type="button"
-              role="tab"
-              aria-selected={centerTab === "diff"}
-              className={centerTab === "diff" ? "active" : ""}
-              onClick={() => setCenterTab("diff")}
+              className={mobilePane === pane ? "active" : ""}
+              onClick={() => setMobilePane(pane)}
             >
-              Diff
+              {pane}
             </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={centerTab === "audit"}
-              className={centerTab === "audit" ? "active" : ""}
-              onClick={() => setCenterTab("audit")}
-            >
-              Audit log
-            </button>
-          </div>
-          {centerTab === "diff" ? (
-            <DiffViewer diffs={view?.diffs ?? []} />
-          ) : (
-            <AuditLog />
-          )}
-        </section>
+          ))}
+        </nav>
 
-        <section className={`panel panel-right ${mobilePane === "chat" ? "visible" : ""}`}>
-          {view && selected ? (
-            <Conversation sessionId={selected} />
-          ) : (
-            <p className="empty">selecciona o crea una sesión</p>
-          )}
-        </section>
-      </main>
-    </div>
+        <main className="panels">
+          <aside className={`panel panel-left ${mobilePane === "sesiones" ? "visible" : ""}`}>
+            {relay && <RelayNewTask />}
+            {relay && <OutboxCard />}
+            <SessionList onSelect={onSelect} />
+          </aside>
+
+          <section className={`panel panel-center ${mobilePane === "trabajo" ? "visible" : ""}`}>
+            <div className="center-tabs" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={centerTab === "diff"}
+                className={centerTab === "diff" ? "active" : ""}
+                onClick={() => setCenterTab("diff")}
+              >
+                Diff
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={centerTab === "audit"}
+                className={centerTab === "audit" ? "active" : ""}
+                onClick={() => setCenterTab("audit")}
+              >
+                Audit log
+              </button>
+            </div>
+            {centerTab === "diff" ? (
+              <DiffViewer diffs={view?.diffs ?? []} />
+            ) : (
+              <AuditLog />
+            )}
+          </section>
+
+          <section className={`panel panel-right ${mobilePane === "chat" ? "visible" : ""}`}>
+            {view && selected ? (
+              <Conversation sessionId={selected} />
+            ) : (
+              <p className="empty">
+                {relay ? "encola una tarea o selecciona una sesión" : "selecciona o crea una sesión"}
+              </p>
+            )}
+          </section>
+        </main>
+      </div>
+    </TransportProvider>
+  );
+}
+
+/// Encolar una tarea nueva (relay): crea una sesión al drenar en el escritorio.
+/// Con el escritorio online el relay la entrega al instante; si no, queda "En
+/// cola". Espejo del FAB "Nueva tarea" del móvil.
+function RelayNewTask() {
+  const transport = useTransport();
+  const [draft, setDraft] = useState("");
+  const [note, setNote] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const content = draft.trim();
+    if (!content) return;
+    try {
+      const { queued } = await transport.send(null, content);
+      setDraft("");
+      setNote(queued ? "En cola — se ejecutará cuando el escritorio esté en línea" : "Enviada");
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return (
+    <form className="relay-new-task" onSubmit={submit}>
+      <textarea
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        placeholder='Nueva tarea, p. ej. "agrega docstrings al módulo X"'
+        rows={2}
+        maxLength={32000}
+        aria-label="Nueva tarea para encolar"
+      />
+      <button type="submit" disabled={!draft.trim()}>Encolar tarea</button>
+      {note && <p className="notice">{note}</p>}
+    </form>
   );
 }
 
 function Conversation({ sessionId }: { sessionId: string }) {
   const view = useStore((s) => s.views[sessionId]);
+  const daemonOffline = useStore((s) => s.daemonOffline);
   const addUserMessage = useStore((s) => s.addUserMessage);
+  const transport = useTransport();
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const busy = view?.state === "running" || view?.state === "waiting_approval";
+  // En relay con el escritorio offline el envío queda "En cola".
+  const queueing = transport.mode === "relay" && daemonOffline;
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
     const content = draft.trim();
     if (!content) return;
     setError(null);
-    // client_msg_id: idempotencia extremo a extremo (C-1).
-    const clientMsgId = crypto.randomUUID();
     try {
-      const res = await api.sendMessage(sessionId, {
-        content,
-        client_msg_id: clientMsgId,
-      });
-      addUserMessage(sessionId, res.message_id, content);
+      const { messageId } = await transport.send(sessionId, content);
+      addUserMessage(sessionId, messageId, content);
       setDraft("");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -328,7 +555,7 @@ function Conversation({ sessionId }: { sessionId: string }) {
   if (!view) return null;
   return (
     <div className="conversation">
-      <MessageStream view={view} />
+      <MessageStream view={view} sessionId={sessionId} />
       <form className="composer" onSubmit={send}>
         <textarea
           value={draft}
@@ -336,7 +563,9 @@ function Conversation({ sessionId }: { sessionId: string }) {
           placeholder={
             view.state === "waiting_approval"
               ? "resuelve la aprobación pendiente primero…"
-              : "Escribe una instrucción…"
+              : queueing
+                ? "Se ejecutará cuando el escritorio esté en línea"
+                : "Escribe una instrucción…"
           }
           rows={2}
           maxLength={32000}
@@ -344,13 +573,16 @@ function Conversation({ sessionId }: { sessionId: string }) {
           aria-label="Instrucción para el agente"
         />
         <button type="submit" disabled={!draft.trim() || view.state === "waiting_approval"}>
-          {busy ? "en curso…" : "Enviar"}
+          {busy ? "en curso…" : queueing ? "Encolar" : "Enviar"}
         </button>
-        <MicButton
-          disabled={view.state === "waiting_approval" || view.state === "archived"}
-          onText={(text) => setDraft((current) => current ? `${current} ${text}` : text)}
-          onError={setError}
-        />
+        {/* El mic requiere ASR por REST del daemon: no disponible en relay (RNF-10). */}
+        {transport.supportsRest && (
+          <MicButton
+            disabled={view.state === "waiting_approval" || view.state === "archived"}
+            onText={(text) => setDraft((current) => current ? `${current} ${text}` : text)}
+            onError={setError}
+          />
+        )}
       </form>
       {error && <p className="error-text">{error}</p>}
     </div>

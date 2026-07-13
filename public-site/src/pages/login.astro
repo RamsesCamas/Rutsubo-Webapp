@@ -1,26 +1,47 @@
 ---
-// Autenticación (fase local): pide el token del daemon y lo entrega a la SPA
-// por fragmento de URL (#token=…), que nunca viaja a ningún servidor.
-//
-// PUNTO DE EXTENSIÓN (fase futura, contrato C-2): aquí vivirá el flujo de
-// cuenta del relay — POST /v1/auth/register + /v1/auth/token (correo +
-// contraseña, Argon2id) y el pairing con código de un solo uso. El formulario
-// de token local quedará como camino de "modo completamente local" (RNF-11).
+// Autenticación. Dos caminos que entregan la credencial a la SPA por fragmento
+// de URL (#…), que nunca viaja a ningún servidor:
+//   1) Relay C-2 (Google Sign-In): GIS → id_token → canje en el relay
+//      (POST /v1/auth/google) → device_token → #device_token=. Unifica la
+//      cuenta con el móvil/escritorio.
+//   2) Token local del daemon (#token=): "modo completamente local" (RNF-11).
 import Base from "../layouts/Base.astro";
 
 // En dev la SPA corre en 5173 (Vite); en producción se sirve junto a esta
 // superficie bajo /app/.
 const spaUrl = import.meta.env.DEV ? "http://localhost:5173/" : "/app/";
+// Config del relay (públicos, no secretos). Client ID **Web** de Google + base
+// del relay. Vacío ⇒ el botón de Google se oculta y solo queda el token local.
+const googleClientId = import.meta.env.PUBLIC_GOOGLE_CLIENT_ID ?? "";
+const relayHttp = import.meta.env.PUBLIC_RELAY_HTTP ?? "http://127.0.0.1:8443";
 ---
 
 <Base
   title="Rutsubo — Iniciar sesión"
-  description="Conecta la interfaz web de Rutsubo con el daemon local usando tu token."
+  description="Inicia sesión en Rutsubo con Google o con el token local del daemon."
 >
   <main class="login">
     <h1>Iniciar sesión</h1>
+
+    {googleClientId && (
+      <>
+        <button
+          id="google-btn"
+          type="button"
+          class="google"
+          data-client-id={googleClientId}
+          data-relay-http={relayHttp}
+          data-spa-url={spaUrl}
+        >
+          Continuar con Google
+        </button>
+        <p id="google-error" class="error" hidden></p>
+        <hr />
+      </>
+    )}
+
     <p>
-      Pega el token local del daemon. Está en
+      O pega el token local del daemon. Está en
       <code>~/.local/share/rutsubo/token</code> y se generó en el primer
       arranque.
     </p>
@@ -30,7 +51,7 @@ const spaUrl = import.meta.env.DEV ? "http://localhost:5173/" : "/app/";
       <button type="submit">Conectar</button>
     </form>
     <p class="hint">
-      El token viaja solo en el fragmento de la URL (nunca al servidor) y se
+      La credencial viaja solo en el fragmento de la URL (nunca al servidor) y se
       guarda en <code>sessionStorage</code>: muere al cerrar la pestaña.
     </p>
     <p><a href="/">← volver</a></p>
@@ -38,7 +59,7 @@ const spaUrl = import.meta.env.DEV ? "http://localhost:5173/" : "/app/";
 </Base>
 
 <script>
-  // Vanilla mínimo (no framework): entrega el token a la SPA vía #fragment.
+  // Vanilla mínimo (no framework): entrega la credencial a la SPA vía #fragment.
   const form = document.getElementById("login-form") as HTMLFormElement;
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -47,6 +68,59 @@ const spaUrl = import.meta.env.DEV ? "http://localhost:5173/" : "/app/";
     const spaUrl = form.dataset.spaUrl ?? "/app/";
     window.location.href = `${spaUrl}#token=${encodeURIComponent(token)}`;
   });
+
+  // Google Sign-In (relay C-2): GIS → id_token → canje → #device_token=.
+  const gbtn = document.getElementById("google-btn") as HTMLButtonElement | null;
+  if (gbtn) {
+    const clientId = gbtn.dataset.clientId!;
+    const relayHttp = gbtn.dataset.relayHttp!;
+    const spaUrl = gbtn.dataset.spaUrl ?? "/app/";
+    const errEl = document.getElementById("google-error") as HTMLParagraphElement;
+    const fail = (msg: string) => {
+      errEl.textContent = msg;
+      errEl.hidden = false;
+      gbtn.disabled = false;
+    };
+    const emailFromJwt = (jwt: string): string => {
+      try {
+        return JSON.parse(atob(jwt.split(".")[1])).email ?? "";
+      } catch {
+        return "";
+      }
+    };
+    const exchange = async (idToken: string) => {
+      const res = await fetch(`${relayHttp}/v1/auth/google`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id_token: idToken, device: { kind: "web", name: "Navegador" } }),
+      });
+      if (!res.ok) throw new Error(`canje rechazado (${res.status})`);
+      const { device_token } = (await res.json()) as { device_token: string };
+      const email = emailFromJwt(idToken);
+      window.location.href =
+        `${spaUrl}#device_token=${encodeURIComponent(device_token)}` +
+        (email ? `&email=${encodeURIComponent(email)}` : "");
+    };
+    gbtn.addEventListener("click", () => {
+      gbtn.disabled = true;
+      errEl.hidden = true;
+      const script = document.createElement("script");
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.onload = () => {
+        const google = (window as unknown as { google?: any }).google;
+        if (!google?.accounts?.id) return fail("GIS no disponible");
+        google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (r: { credential: string }) =>
+            exchange(r.credential).catch((e) => fail(String(e?.message ?? e))),
+        });
+        google.accounts.id.prompt();
+      };
+      script.onerror = () => fail("no se pudo cargar Google Sign-In");
+      document.head.appendChild(script);
+    });
+  }
 </script>
 
 <style>
@@ -89,6 +163,31 @@ const spaUrl = import.meta.env.DEV ? "http://localhost:5173/" : "/app/";
   button:hover,
   button:focus-visible {
     background: var(--sage-dark);
+  }
+  .google {
+    background: #fff;
+    color: var(--graphite);
+    border: 1px solid var(--line);
+    font-weight: 600;
+  }
+  .google:hover,
+  .google:focus-visible {
+    background: #f2f1ec;
+  }
+  .google:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+  hr {
+    width: 100%;
+    border: none;
+    border-top: 1px solid var(--line);
+    margin: 0.4rem 0;
+  }
+  .error {
+    color: #a3341f;
+    font-size: 0.88rem;
+    margin: 0;
   }
   .hint {
     color: var(--graphite-soft);

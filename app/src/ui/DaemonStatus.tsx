@@ -11,10 +11,16 @@ const LABEL = {
 export function DaemonStatus() {
   const status = useStore((s) => s.status);
   const provider = useStore((s) => s.provider);
+  const daemonOffline = useStore((s) => s.daemonOffline);
+  // Conectado al relay pero sin escritorio en línea: honesto "escritorio offline"
+  // (ámbar) en vez de un verde engañoso.
+  const offline = status === "connected" && daemonOffline;
   return (
     <div className="daemon-status">
       <span>
-        daemon: <span className={`dot dot-${status}`} aria-hidden="true" /> {LABEL[status]}
+        daemon:{" "}
+        <span className={`dot dot-${offline ? "connecting" : status}`} aria-hidden="true" />{" "}
+        {offline ? "escritorio offline" : LABEL[status]}
       </span>
       {provider && (
         <span className="provider">
