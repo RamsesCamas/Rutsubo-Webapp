@@ -31,7 +31,7 @@ export const DAEMON_WS = import.meta.env.VITE_DAEMON_WS ?? "ws://127.0.0.1:7431/
 // `withGlobalTauri`, así que no hay dependencia npm nueva.
 export const IS_TAURI = typeof window !== "undefined" && "__TAURI__" in window;
 
-type TauriGlobal = { core: { invoke: (cmd: string) => Promise<unknown> } };
+type TauriGlobal = { core: { invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> } };
 
 /** Pide al lado Rust del shell el token local del daemon (comando
  *  `get_local_token`). El token viaja solo en memoria: nunca query string,
@@ -46,6 +46,14 @@ export async function fetchTauriToken(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/** Invoca un comando del lado Rust del shell (solo Tauri). Lanza si el comando
+ *  falla; el llamador traduce el error a UI. */
+export async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+  if (!tauri) throw new Error("no disponible fuera del escritorio");
+  return tauri.core.invoke(cmd, args) as Promise<T>;
 }
 
 /** Abre el diálogo NATIVO de selección de carpeta del sistema (solo Tauri).
