@@ -157,6 +157,12 @@ function LinkAccountSection() {
           {busy ? "Vinculando…" : "Vincular con Google"}
         </button>
       </div>
+      {!GOOGLE_CLIENT_ID && (
+        <p className="hint small">
+          Botón deshabilitado: falta el client ID de Google (paso M0). Configura
+          VITE_GOOGLE_CLIENT_ID al compilar la SPA; mientras, usa el modo desarrollador.
+        </p>
+      )}
       <details className="login-dev">
         <summary>Modo desarrollador (relay dev)</summary>
         <form
