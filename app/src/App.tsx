@@ -347,6 +347,11 @@ function Workspace({
             useStore.getState().applyEvent(event);
             return;
           }
+          // Cualquier frame de sesión (vivo o snapshot) implica que el
+          // escritorio está en línea: baja el "escritorio offline".
+          if (useStore.getState().daemonOffline) {
+            useStore.getState().setDaemonOffline(false);
+          }
           // La LISTA de sesiones se mantiene aquí (upsert): `session_state`
           // llega tanto vivo como en el snapshot de anuncio (SIN seq) que el
           // daemon manda al conectarse o cuando este cliente entra tarde —
@@ -468,17 +473,20 @@ function Workspace({
               >
                 Diff
               </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={centerTab === "audit"}
-                className={centerTab === "audit" ? "active" : ""}
-                onClick={() => setCenterTab("audit")}
-              >
-                Audit log
-              </button>
+              {/* El audit log es REST del daemon: no existe en relay (RNF-10). */}
+              {!relay && (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={centerTab === "audit"}
+                  className={centerTab === "audit" ? "active" : ""}
+                  onClick={() => setCenterTab("audit")}
+                >
+                  Audit log
+                </button>
+              )}
             </div>
-            {centerTab === "diff" ? (
+            {centerTab === "diff" || relay ? (
               <DiffViewer diffs={view?.diffs ?? []} />
             ) : (
               <AuditLog />
