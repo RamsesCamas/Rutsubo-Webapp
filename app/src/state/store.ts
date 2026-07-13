@@ -80,6 +80,13 @@ interface AppStore {
   setProvider: (provider: ProviderStatus | null) => void;
   setSessions: (sessions: SessionDto[]) => void;
   upsertSession: (session: SessionDto) => void;
+  /** Upsert de la lista desde un `session_state` (vivo o snapshot de anuncio). */
+  upsertSessionMeta: (
+    sessionId: string,
+    state: SessionState,
+    title: string | null,
+    ts: string,
+  ) => void;
   select: (sessionId: string | null) => void;
   setGapFilling: (sessionId: string, filling: boolean) => void;
   setOutbox: (outbox: OutboxItem[]) => void;
@@ -102,6 +109,29 @@ export const useStore = create<AppStore>((set) => ({
   setStatus: (status) => set({ status }),
   setOutbox: (outbox) => set({ outbox }),
   setDaemonOffline: (daemonOffline) => set({ daemonOffline }),
+  upsertSessionMeta: (sessionId, state, title, ts) =>
+    set((store) => {
+      const existing = store.sessions.find((s) => s.id === sessionId);
+      if (existing) {
+        return {
+          sessions: store.sessions.map((s) =>
+            s.id === sessionId ? { ...s, state, title: title ?? s.title } : s,
+          ),
+        };
+      }
+      // Sesión desconocida (creada en el escritorio): entra a la lista. En
+      // relay no hay REST (RNF-10), así que los metadatos que el snapshot no
+      // trae quedan en placeholders.
+      const dto: SessionDto = {
+        id: sessionId,
+        workspace_path: "",
+        title: title ?? "(sin título)",
+        state,
+        created_at: ts,
+        last_seq: 0,
+      };
+      return { sessions: [dto, ...store.sessions] };
+    }),
   setProvider: (provider) => set({ provider }),
   setSessions: (sessions) => set({ sessions }),
   upsertSession: (session) =>

@@ -347,6 +347,16 @@ function Workspace({
             useStore.getState().applyEvent(event);
             return;
           }
+          // La LISTA de sesiones se mantiene aquí (upsert): `session_state`
+          // llega tanto vivo como en el snapshot de anuncio (SIN seq) que el
+          // daemon manda al conectarse o cuando este cliente entra tarde —
+          // así las sesiones del escritorio aparecen en la web.
+          if (event.type === "session_state") {
+            useStore
+              .getState()
+              .upsertSessionMeta(sessionId, event.payload.state, event.payload.title ?? null, event.ts);
+          }
+          if (event.seq == null) return; // anuncio: no entra al secuenciador
           // Una tarea encolada se drenó: refrescar el buzón para retirarla (RF-17).
           if (event.type === "task_dequeued") void refreshOutbox();
           const sequencer = sequencersRef.current.get(sessionId);
