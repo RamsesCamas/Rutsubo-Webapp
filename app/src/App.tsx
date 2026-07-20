@@ -16,7 +16,7 @@ import {
 } from "./api/relay";
 import { googleIdToken } from "./api/google";
 import { relayTransport, restTransport, TransportProvider, useTransport } from "./api/transport";
-import { useStore } from "./state/store";
+import { useStore, type SessionView } from "./state/store";
 import { DaemonSocket } from "./ws/connection";
 import { SessionSequencer } from "./ws/sequencer";
 import { AuditLog } from "./ui/AuditLog";
@@ -548,7 +548,7 @@ function Workspace({
           </section>
 
           <section className={`panel panel-right ${mobilePane === "chat" ? "visible" : ""}`}>
-            {view && selected ? (
+            {selected ? (
               <Conversation sessionId={selected} remote={remote} />
             ) : (
               <p className="empty">
@@ -613,8 +613,21 @@ const EXAMPLE_PROMPT =
   'Genera un archivo saludo.html con un botón que, al hacer clic, muestre una ' +
   'alerta "¡Hola desde Rutsubo!".';
 
+const EMPTY_VIEW: SessionView = {
+  state: "idle",
+  messages: [],
+  approvals: [],
+  diffs: [],
+  tools: [],
+  notices: [],
+  gapFilling: false,
+};
+
 function Conversation({ sessionId, remote = false }: { sessionId: string; remote?: boolean }) {
-  const view = useStore((s) => s.views[sessionId]);
+  // La vista se puebla con los eventos C-3 (WS). Mientras no lleguen, mostramos
+  // el compositor igual (con una vista vacía) para que el chat sea visible en
+  // cuanto se selecciona la sesión, sin esperar a la conexión del WebSocket.
+  const view = useStore((s) => s.views[sessionId]) ?? EMPTY_VIEW;
   const daemonOffline = useStore((s) => s.daemonOffline);
   const addUserMessage = useStore((s) => s.addUserMessage);
   const transport = useTransport();
@@ -660,7 +673,6 @@ function Conversation({ sessionId, remote = false }: { sessionId: string; remote
     }
   }
 
-  if (!view) return null;
   const disabled = view.state === "waiting_approval" || view.state === "archived";
   return (
     <div className="conversation">
