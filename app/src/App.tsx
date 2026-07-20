@@ -26,9 +26,10 @@ import { SettingsModal } from "./ui/SettingsModal";
 import { MicButton } from "./ui/MicButton";
 import { DiffViewer } from "./ui/DiffViewer";
 import { MessageStream } from "./ui/MessageStream";
+import { PreviewPanel } from "./ui/PreviewPanel";
 import { SessionList } from "./ui/SessionList";
 
-type CenterTab = "diff" | "audit";
+type CenterTab = "diff" | "audit" | "vista";
 type MobilePane = "sesiones" | "trabajo" | "chat";
 
 export function App() {
@@ -193,6 +194,24 @@ function RemoteApp() {
 }
 
 function LoginScreen() {
+  const [demo, setDemo] = useState(false);
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submitDemo(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await api.demoLogin(code.trim());
+      location.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "código inválido");
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="login-screen">
       <section className="login-card">
@@ -204,6 +223,26 @@ function LoginScreen() {
           <span>Continuar con Google</span>
         </a>
         <p className="login-hint">Acceso limitado a cuentas autorizadas.</p>
+        {demo ? (
+          <form className="demo-form" onSubmit={submitDemo}>
+            <input
+              type="password"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="código de acceso demo"
+              aria-label="Código de acceso demo"
+              autoFocus
+            />
+            <button type="submit" disabled={busy || !code.trim()}>
+              {busy ? "Entrando…" : "Entrar"}
+            </button>
+            {error && <p className="error-text">{error}</p>}
+          </form>
+        ) : (
+          <button type="button" className="ghost demo-link" onClick={() => setDemo(true)}>
+            Entrar en modo demo
+          </button>
+        )}
       </section>
     </main>
   );
@@ -459,7 +498,7 @@ function Workspace({
           <aside className={`panel panel-left ${mobilePane === "sesiones" ? "visible" : ""}`}>
             {relay && <RelayNewTask />}
             {relay && <OutboxCard />}
-            <SessionList onSelect={onSelect} />
+            <SessionList onSelect={onSelect} remote={remote} />
           </aside>
 
           <section className={`panel panel-center ${mobilePane === "trabajo" ? "visible" : ""}`}>
@@ -473,6 +512,19 @@ function Workspace({
               >
                 Diff
               </button>
+              {/* Vista de archivos generados/subidos: solo en la web desplegada
+                  (remoto), donde los archivos persisten en Postgres. */}
+              {remote && (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={centerTab === "vista"}
+                  className={centerTab === "vista" ? "active" : ""}
+                  onClick={() => setCenterTab("vista")}
+                >
+                  Vista
+                </button>
+              )}
               {/* El audit log es REST del daemon: no existe en relay (RNF-10). */}
               {!relay && (
                 <button
@@ -486,7 +538,9 @@ function Workspace({
                 </button>
               )}
             </div>
-            {centerTab === "diff" || relay ? (
+            {centerTab === "vista" && remote ? (
+              <PreviewPanel sessionId={selected} />
+            ) : centerTab === "diff" || relay ? (
               <DiffViewer diffs={view?.diffs ?? []} />
             ) : (
               <AuditLog />
@@ -495,7 +549,7 @@ function Workspace({
 
           <section className={`panel panel-right ${mobilePane === "chat" ? "visible" : ""}`}>
             {view && selected ? (
-              <Conversation sessionId={selected} />
+              <Conversation sessionId={selected} remote={remote} />
             ) : (
               <p className="empty">
                 {relay ? "encola una tarea o selecciona una sesión" : "selecciona o crea una sesión"}
@@ -545,13 +599,31 @@ function RelayNewTask() {
   );
 }
 
-function Conversation({ sessionId }: { sessionId: string }) {
+// Instrucción del modo debugger: análisis de calidad/seguridad sin tocar el
+// código salvo que se pida. Se antepone al mensaje del usuario (sin cambios de
+// backend/contrato); el agente ya tiene read_file/search en remoto.
+const DEBUGGER_PREFIX =
+  "Actúa como analista de seguridad y calidad de código. Revisa el código del " +
+  "workspace y los archivos subidos en busca de bugs, errores lógicos y " +
+  "vulnerabilidades. Reporta cada hallazgo con severidad (alta/media/baja), " +
+  "archivo y línea, y una recomendación concreta. No modifiques archivos salvo " +
+  "que se te pida explícitamente. Petición del usuario: ";
+
+const EXAMPLE_PROMPT =
+  'Genera un archivo saludo.html con un botón que, al hacer clic, muestre una ' +
+  'alerta "¡Hola desde Rutsubo!".';
+
+function Conversation({ sessionId, remote = false }: { sessionId: string; remote?: boolean }) {
   const view = useStore((s) => s.views[sessionId]);
   const daemonOffline = useStore((s) => s.daemonOffline);
   const addUserMessage = useStore((s) => s.addUserMessage);
   const transport = useTransport();
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [debug, setDebug] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const busy = view?.state === "running" || view?.state === "waiting_approval";
   // En relay con el escritorio offline el envío queda "En cola".
   const queueing = transport.mode === "relay" && daemonOffline;
@@ -561,8 +633,9 @@ function Conversation({ sessionId }: { sessionId: string }) {
     const content = draft.trim();
     if (!content) return;
     setError(null);
+    const outgoing = debug ? DEBUGGER_PREFIX + content : content;
     try {
-      const { messageId } = await transport.send(sessionId, content);
+      const { messageId } = await transport.send(sessionId, outgoing);
       addUserMessage(sessionId, messageId, content);
       setDraft("");
     } catch (err) {
@@ -570,10 +643,48 @@ function Conversation({ sessionId }: { sessionId: string }) {
     }
   }
 
+  async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setError(null);
+    setNote(null);
+    setUploading(true);
+    try {
+      const { saved } = await api.uploadFile(sessionId, file);
+      setNote(`Subido: ${saved.join(", ")}. Actívalo con "🐞 Debugger" y pide el análisis.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploading(false);
+    }
+  }
+
   if (!view) return null;
+  const disabled = view.state === "waiting_approval" || view.state === "archived";
   return (
     <div className="conversation">
       <MessageStream view={view} sessionId={sessionId} />
+      {remote && (
+        <div className="composer-tools">
+          <button
+            type="button"
+            className={debug ? "chip active" : "chip"}
+            aria-pressed={debug}
+            onClick={() => setDebug((v) => !v)}
+            title="Analizar código en busca de bugs y vulnerabilidades"
+          >
+            🐞 Debugger
+          </button>
+          <button type="button" className="chip" disabled={uploading} onClick={() => fileInput.current?.click()}>
+            {uploading ? "Subiendo…" : "📎 Subir archivo"}
+          </button>
+          <button type="button" className="chip" onClick={() => setDraft(EXAMPLE_PROMPT)}>
+            Probar ejemplo
+          </button>
+          <input ref={fileInput} type="file" hidden onChange={onUpload} />
+        </div>
+      )}
       <form className="composer" onSubmit={send}>
         <textarea
           value={draft}
@@ -583,25 +694,28 @@ function Conversation({ sessionId }: { sessionId: string }) {
               ? "resuelve la aprobación pendiente primero…"
               : queueing
                 ? "Se ejecutará cuando el escritorio esté en línea"
-                : "Escribe una instrucción…"
+                : debug
+                  ? "Qué código analizar (o deja que revise el workspace)…"
+                  : "Escribe una instrucción…"
           }
           rows={2}
           maxLength={32000}
-          disabled={view.state === "waiting_approval" || view.state === "archived"}
+          disabled={disabled}
           aria-label="Instrucción para el agente"
         />
         <button type="submit" disabled={!draft.trim() || view.state === "waiting_approval"}>
-          {busy ? "en curso…" : queueing ? "Encolar" : "Enviar"}
+          {busy ? "en curso…" : queueing ? "Encolar" : debug ? "Analizar" : "Enviar"}
         </button>
         {/* El mic requiere ASR por REST del daemon: no disponible en relay (RNF-10). */}
         {transport.supportsRest && (
           <MicButton
-            disabled={view.state === "waiting_approval" || view.state === "archived"}
+            disabled={disabled}
             onText={(text) => setDraft((current) => current ? `${current} ${text}` : text)}
             onError={setError}
           />
         )}
       </form>
+      {note && <p className="notice">{note}</p>}
       {error && <p className="error-text">{error}</p>}
     </div>
   );

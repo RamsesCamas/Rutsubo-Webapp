@@ -5,7 +5,13 @@ import { api } from "../api/client";
 import { useStore } from "../state/store";
 import { FolderPicker } from "./FolderPicker";
 
-export function SessionList({ onSelect }: { onSelect: (id: string) => void }) {
+export function SessionList({
+  onSelect,
+  remote = false,
+}: {
+  onSelect: (id: string) => void;
+  remote?: boolean;
+}) {
   const sessions = useStore((s) => s.sessions);
   const selected = useStore((s) => s.selected);
   const upsert = useStore((s) => s.upsertSession);
@@ -19,8 +25,10 @@ export function SessionList({ onSelect }: { onSelect: (id: string) => void }) {
     setError(null);
     setCreating(true);
     try {
+      // Remoto: la web no navega el FS del servidor; el daemon asigna un
+      // workspace temporal por sesión, así que basta con el título.
       const session = await api.createSession({
-        workspace_path: workspace,
+        workspace_path: remote ? "" : workspace,
         title: title || null,
       });
       upsert(session);
@@ -55,24 +63,26 @@ export function SessionList({ onSelect }: { onSelect: (id: string) => void }) {
 
       <form className="new-session" onSubmit={create}>
         <h3>Nueva sesión</h3>
-        <div className="workspace-field">
-          <input
-            value={workspace}
-            onChange={(e) => setWorkspace(e.target.value)}
-            placeholder="carpeta del proyecto"
-            required
-            aria-label="Carpeta del workspace"
-          />
-          <FolderPicker onPick={(path) => setWorkspace(path)} />
-        </div>
+        {!remote && (
+          <div className="workspace-field">
+            <input
+              value={workspace}
+              onChange={(e) => setWorkspace(e.target.value)}
+              placeholder="carpeta del proyecto"
+              required
+              aria-label="Carpeta del workspace"
+            />
+            <FolderPicker onPick={(path) => setWorkspace(path)} />
+          </div>
+        )}
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="título (opcional)"
+          placeholder={remote ? "título de la sesión" : "título (opcional)"}
           maxLength={120}
           aria-label="Título de la sesión"
         />
-        <button type="submit" disabled={creating || !workspace}>
+        <button type="submit" disabled={creating || (!remote && !workspace)}>
           + Nueva sesión
         </button>
         {error && <p className="error-text">{error}</p>}

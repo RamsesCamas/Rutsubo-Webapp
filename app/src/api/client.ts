@@ -210,4 +210,58 @@ export const api = {
   // Ticket efímero de un solo uso para el handshake del WS (el navegador no
   // puede mandar Authorization en el upgrade y el BFF no proxya WebSockets).
   wsTicket: () => request<WsTicketResponse>("POST", "/v1/ws/ticket"),
+
+  // ---- Archivos generados/subidos (web-only, modo remoto) ----
+  // Persistidos en Postgres; el proxy BFF los expone bajo /api/rutsubo. Tipos
+  // ad-hoc locales (no del contrato C-n): son exclusivos de la web.
+
+  /** Lista de archivos de la sesión (metadatos). */
+  listFiles: (id: string) =>
+    request<{ files: GeneratedFile[] }>("GET", `/v1/sessions/${id}/files`),
+
+  /** URL cruda de un archivo (para iframe de preview, descarga o pestaña nueva).
+   *  El BFF reenvía el Content-Type; el navegador renderiza el HTML. */
+  fileRawUrl: (id: string, path: string) =>
+    `${DAEMON_HTTP}/v1/sessions/${id}/files/raw?path=${encodeURIComponent(path)}`,
+
+  /** Sube un archivo de código (multipart; sin Content-Type manual, el
+   *  navegador pone el boundary; en remoto la auth es la cookie). */
+  async uploadFile(id: string, file: File): Promise<{ saved: string[] }> {
+    const data = new FormData();
+    data.append("file", file, file.name);
+    const headers: Record<string, string> = {};
+    const token = getToken();
+    if (token && !REMOTE_AUTH) headers.Authorization = `Bearer ${token}`;
+    const response = await fetch(`${DAEMON_HTTP}/v1/sessions/${id}/files`, {
+      method: "POST",
+      headers,
+      body: data,
+    });
+    if (!response.ok) {
+      const envelope = (await response.json().catch(() => null)) as ErrorEnvelope | null;
+      throw new ApiError(response.status, envelope?.error.code ?? "internal", envelope?.error.message ?? "no se pudo subir el archivo");
+    }
+    return response.json() as Promise<{ saved: string[] }>;
+  },
+
+  /** Login del perfil demo (respaldo con código; sin Google). */
+  async demoLogin(code: string): Promise<void> {
+    const response = await fetch("/api/auth/demo", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(body?.error ?? "código demo inválido");
+    }
+  },
 };
+
+/** Metadatos de un archivo generado/subido (respuesta ad-hoc web-only). */
+export interface GeneratedFile {
+  path: string;
+  mime: string;
+  bytes: number;
+  updated_at: string;
+}
