@@ -220,9 +220,10 @@ export const api = {
     request<{ files: GeneratedFile[] }>("GET", `/v1/sessions/${id}/files`),
 
   /** URL cruda de un archivo (para iframe de preview, descarga o pestaña nueva).
-   *  El BFF reenvía el Content-Type; el navegador renderiza el HTML. */
+   *  El BFF reenvía el Content-Type; el navegador renderiza el HTML. El query
+   *  se llama `f` (no `path`): el catch-all del proxy BFF descarta `path`. */
   fileRawUrl: (id: string, path: string) =>
-    `${DAEMON_HTTP}/v1/sessions/${id}/files/raw?path=${encodeURIComponent(path)}`,
+    `${DAEMON_HTTP}/v1/sessions/${id}/files/raw?f=${encodeURIComponent(path)}`,
 
   /** Sube un archivo de código (multipart; sin Content-Type manual, el
    *  navegador pone el boundary; en remoto la auth es la cookie). */
